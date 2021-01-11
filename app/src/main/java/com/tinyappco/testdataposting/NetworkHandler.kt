@@ -8,7 +8,7 @@ import java.util.*
 
 class NetworkHandler(val deviceGUID: String) {
 
-    private val urlString = "https://oneair.1809152.win.studentwebserver.co.uk/api/airqualities"
+    private val urlString = "https://put-your-api-url-here"
 
     interface NetworkErrorHandler {
         fun networkError(message: String)
