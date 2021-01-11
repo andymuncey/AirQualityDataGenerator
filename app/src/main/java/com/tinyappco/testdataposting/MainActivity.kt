@@ -23,20 +23,41 @@ class MainActivity : AppCompatActivity(), NetworkHandler.NetworkErrorHandler {
         setContentView(R.layout.activity_main)
 
         requestLocationAccess()
+        networkHandler = NetworkHandler(deviceGUID())
     }
 
-    val networkHandler = NetworkHandler()
-    var hasLocationPermission = false
-    var loc: Location? = null
-    var locMan: LocationManager? = null
+    private fun deviceGUID() : String {
+        val sharedPref = this.getPreferences(
+            Context.MODE_PRIVATE)
+        val existingGuid = sharedPref.getString("Guid", null)
+        if (existingGuid == null) {
+            val guid = UUID.randomUUID().toString()
+            with (sharedPref.edit()){
+                putString("Guid",guid)
+                apply()
+            }
+            return guid
+        }
+        else {
+            return existingGuid
+        }
+    }
 
-    var running = false
+
+    private lateinit var networkHandler : NetworkHandler
+    private var hasLocationPermission = false
+    var loc: Location? = null
+    private var locMan: LocationManager? = null
+
+    private var running = false
+
+    var locationFound = false
 
     private fun requestLocationAccess() {
         hasLocationPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!hasLocationPermission) {
             ActivityCompat.requestPermissions(this, arrayOf(
-                    android.Manifest.permission.ACCESS_FINE_LOCATION
+                    Manifest.permission.ACCESS_FINE_LOCATION
                 ), 10
             )
         } else {
@@ -68,16 +89,21 @@ class MainActivity : AppCompatActivity(), NetworkHandler.NetworkErrorHandler {
             stop()
             Toast.makeText(this,"Stopping", Toast.LENGTH_SHORT).show()
         } else {
-            running = true
-            start()
-            Toast.makeText(this,"Starting", Toast.LENGTH_SHORT).show()
+            if (loc != null) {
+                running = true
+                start()
+                Toast.makeText(this, "Starting", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "No location - cannot start", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
-    val interval : Long = 5000
-    val handler = Handler(Looper.getMainLooper())
-    var locationPoster = LocationPoster()
+    val interval : Long = 5000 //how long to wait between posts to the API
 
+    val handler = Handler(Looper.getMainLooper())
+
+    private var locationPoster = LocationPoster()
 
     inner class LocationPoster : Runnable {
         override fun run() {
@@ -86,14 +112,13 @@ class MainActivity : AppCompatActivity(), NetworkHandler.NetworkErrorHandler {
         }
     }
 
-    fun start(){
+    private fun start(){
         locationPoster.run()
     }
 
-    fun stop(){
+    private fun stop(){
         handler.removeCallbacks(locationPoster)
     }
-
 
     private fun createReading(){
         val latitude = loc?.latitude ?: 0.0
@@ -103,17 +128,26 @@ class MainActivity : AppCompatActivity(), NetworkHandler.NetworkErrorHandler {
         networkHandler.post(reading)
     }
 
-
-    override fun error(message: String) {
+    override fun networkError(message: String) {
         runOnUiThread {
             Toast.makeText(this,message, Toast.LENGTH_SHORT).show()
         }
     }
 
+    private fun notifyLocationFound(){
+        Toast.makeText(this, "Location found", Toast.LENGTH_SHORT).show()
+    }
 
     private val locListener: LocationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             loc = location
+            if (!locationFound){
+                locationFound = true
+                runOnUiThread {
+                    notifyLocationFound()
+                }
+            }
+
         }
         override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {/* Required */}
         override fun onProviderEnabled(provider: String) {/* Required */}
@@ -123,7 +157,7 @@ class MainActivity : AppCompatActivity(), NetworkHandler.NetworkErrorHandler {
     private fun registerForLocationUpdates() {
         locMan = this.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         if (ContextCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION
             )
             == PackageManager.PERMISSION_GRANTED
         ) {
